@@ -1,0 +1,25 @@
+Sample liver-volume scaling factor once at model initialization.
+VL_scalec = init(normal(1,0.30))
+VL_scale = IF (VL_scalec > 0.4120) AND (VL_scalec < 1.5880) THEN VL_scalec ELSE 10001
+; Monte Carlo distribution:
+; Normal distribution, arithmetic mean = 1, SD = 0.30
+; lower bound = 0.4120
+; upper bound = 1.5880
+; The sampled value is retained for the entire age-20 -> 79 simulation.
+; PL:
+; log-normal, arithmetic mean = 13.59, CV = 0.20
+; ln-space mu = 2.589724, sigma = 0.198042
+; 2.5th-97.5th bounds = 9.0392-19.6461
+; PRest:
+; log-normal, arithmetic mean = 0.32, CV = 0.20
+; ln-space mu = -1.159045, sigma = 0.198042
+; 2.5th-97.5th bounds = 0.21284-0.46260
+; PL: lognormal, arithmetic mean 13.59, CV 20%
+PLc = init(exp(normal(2.589724,0.198042)))
+PL = IF (PLc > 9.0392) AND (PLc < 19.6461) THEN PLc ELSE 10001
+PK = 1.38
+PLu = 3.91
+PB = 0.11
+; PRest: lognormal, arithmetic mean 0.32, CV 20%
+PRestc = init(exp(normal(-1.159045,0.198042)))
+PRest = IF (PRestc > 0.21284) AND (PRestc < 0.46260) THEN PRestc ELSE 10001
