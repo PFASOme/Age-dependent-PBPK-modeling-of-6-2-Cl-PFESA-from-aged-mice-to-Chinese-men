@@ -1,0 +1,423 @@
+Dynamic age-dependent PBPK model for 6:2 Cl-PFESA (F-53B)
+; Chinese male piecewise-linear height and weight with direct age-dependent physiology
+; PRIMARY USE:
+; Adult-life-course exposure from age 20 years to age 79 years.
+; MODELING STRATEGY:
+; 1. Use Chinese male age-group height and body-weight data with
+; piecewise-linear interpolation.
+; 2. Insert the Chinese anthropometry directly into published male
+; organ-volume and cardiac-output equations, without 25-y/65-y anchoring.
+; 3. Keep F-53B-specific partition coefficients, protein binding,
+; absorption and transporter parameters constant with age.
+; 4. Htc is fixed at 0.44 and FVBK at 0.24. GFRC is derived from
+; age-specific eGFR, BSA, and kidney volume.
+; 5. From age 20 through 50 y, organ blood-flow fractions are fixed at:
+; QBC=0.12, QKC=0.19, and QLC=0.255.
+; After age 50 y, these fractions decline according to the published
+; male age-specific organ-flow shapes, normalized to the age-50 values.
+; 6. Exposure is age-stratified according to daily energy intake.
+; IMPORTANT:
+; This is an adult-life-course model, not a validated birth-to-old-age model.
+; Maternal transfer, lactation, childhood renal maturation and child-specific
+; exposure pathways are not represented.
+; UNITS:
+; Time: h
+; Amount: mg
+; Concentration: mg/L
+; With brain density approximated as 1 kg/L:
+; 1 mg/L = 1 ug/g = 1000 ng/g
+; 1. TIME AND AGE
+Starttime = 0
+Age_start_year = 20
+Age_end_year   = 65
+T65 = 394200
+Stoptime = 394200
+DTMIN = 1e-7
+DTMAX = 1
+DTOUT = 24
+TOLERANCE = 0.0000001
+Age_year = Age_start_year + TIME/(365*24)
+; 2. CHINESE MALE HEIGHT AND BODY WEIGHT
+; Piecewise-linear interpolation of age-group means
+; Age midpoint (y): 22.5  27.5  32.5  37.5  42.5  47.5
+; Height (cm):      172.6 172.1 171.4 170.4 169.4 168.7
+; BW (kg):           70.4  72.8  74.3  74.0  73.2  72.5
+ 
+; Age midpoint (y): 52.5  57.5  62.5  67.5  72.5  77.5
+; Height (cm):      167.9 167.5 165.9 165.4 164.6 164.2
+; BW (kg):           71.6  71.0  69.0  68.1  66.7  65.0
+; Ages below 22.5 y use the 20-24 y group mean.
+; Ages above 77.5 y use the 75-79 y group mean.
+BW = IF Age_year <= 22.5 THEN 70.4 ELSE IF Age_year <= 27.5 THEN
+70.4+(72.8-70.4)*(Age_year-22.5)/5 ELSE IF Age_year <= 32.5 THEN
+72.8+(74.3-72.8)*(Age_year-27.5)/5 ELSE IF Age_year <= 37.5 THEN
+74.3+(74.0-74.3)*(Age_year-32.5)/5 ELSE IF Age_year <= 42.5 THEN
+74.0+(73.2-74.0)*(Age_year-37.5)/5 ELSE IF Age_year <= 47.5 THEN
+73.2+(72.5-73.2)*(Age_year-42.5)/5 ELSE IF Age_year <= 52.5 THEN
+72.5+(71.6-72.5)*(Age_year-47.5)/5 ELSE IF Age_year <= 57.5 THEN
+71.6+(71.0-71.6)*(Age_year-52.5)/5 ELSE IF Age_year <= 62.5 THEN
+71.0+(69.0-71.0)*(Age_year-57.5)/5 ELSE IF Age_year <= 67.5 THEN
+69.0+(68.1-69.0)*(Age_year-62.5)/5 ELSE IF Age_year <= 72.5 THEN
+68.1+(66.7-68.1)*(Age_year-67.5)/5 ELSE IF Age_year <= 77.5 THEN
+66.7+(65.0-66.7)*(Age_year-72.5)/5 ELSE 65.0
+HT = IF Age_year <= 22.5 THEN 172.6 ELSE IF Age_year <= 27.5 THEN
+172.6+(172.1-172.6)*(Age_year-22.5)/5 ELSE IF Age_year <= 32.5 THEN
+172.1+(171.4-172.1)*(Age_year-27.5)/5 ELSE IF Age_year <= 37.5 THEN
+171.4+(170.4-171.4)*(Age_year-32.5)/5 ELSE IF Age_year <= 42.5 THEN
+170.4+(169.4-170.4)*(Age_year-37.5)/5 ELSE IF Age_year <= 47.5 THEN
+169.4+(168.7-169.4)*(Age_year-42.5)/5 ELSE IF Age_year <= 52.5 THEN
+168.7+(167.9-168.7)*(Age_year-47.5)/5 ELSE IF Age_year <= 57.5 THEN
+167.9+(167.5-167.9)*(Age_year-52.5)/5 ELSE IF Age_year <= 62.5 THEN
+167.5+(165.9-167.5)*(Age_year-57.5)/5 ELSE IF Age_year <= 67.5 THEN
+165.9+(165.4-165.9)*(Age_year-62.5)/5 ELSE IF Age_year <= 72.5 THEN
+165.4+(164.6-165.4)*(Age_year-67.5)/5 ELSE IF Age_year <= 77.5 THEN
+164.6+(164.2-164.6)*(Age_year-72.5)/5 ELSE 164.2
+; 3. AGE-DEPENDENT MALE ORGAN VOLUMES
+; The published male regression equations are used directly with the
+; interpolated Chinese male age, BW and HT.
+; No 25-y or 65-y organ-volume scale factors are applied.
+; These outputs are best described as:
+; "organ volumes predicted by published male equations using
+; Chinese male age-specific anthropometry".
+; Liver volume, L
+VL = -0.0143744 -0.0044728*Age_year +0.0264591*BW
+; Brain volume, L
+VB = 0.218096 -0.001590*Age_year -0.003274*BW +0.008626*HT
+; Kidney volume, L
+VK = 0.05668 -0.0004962*Age_year +0.003501*BW
+; Lung volume, L
+VLu = -0.01454 +0.0007269*Age_year +9.329E-6*Age_year^2 +0.006430*BW +3.083E-5*BW^2
+ 
+; 4. AGE-DEPENDENT MALE CARDIAC OUTPUT
+; Chinese male HT and BW are used in the Du Bois body-surface-area equation.
+; The published male cardiac-output equation is then used directly.
+; No cardiac-output anchoring scale is applied.
+SA = 0.007184*(BW^0.425)*(HT^0.725)
+QC_blood = 6.48370 -1.59948*Age_year +214.68572*SA
+; 5. OTHER PHYSIOLOGICAL PARAMETERS
+; Htc and FVBK are fixed as requested. Organ-specific blood flows are
+; calculated below from published age-shape data anchored to Chinese
+; adult male age-50 flow fractions.
+; Hematocrit fixed as requested
+Htc = 0.44
+VPlasC = 0.0428
+VPlas = VPlasC*BW
+; Filtrate volume is maintained at approximately 10% of kidney volume.
+Vfil = 0.10*VK
+VPTCC = 0.000135
+VPTC = VK*VPTCC
+; Kidney blood-volume fraction fixed as requested
+FVBK = 0.24
+VKb = VK*FVBK
+; AGE-DEPENDENT ORGAN BLOOD FLOWS
+; Requested modeling assumption:
+; 20-50 y:
+; QBC = 0.12
+; QKC = 0.19
+; QLC = 0.255
+; >50 y:
+; Each fraction is reduced according to the published age-specific
+; whole-blood organ-flow shape relative to the published age-50 value.
+; Therefore:
+; QBC(age) = 0.12  * [QB_ref(age)/QB_ref(50)]   for age > 50
+; QKC(age) = 0.19  * [QK_ref(age)/QK_ref(50)]   for age > 50
+; QLC(age) = 0.255 * [QL_ref(age)/QL_ref(50)]   for age > 50
+; Published male age-specific WHOLE-BLOOD organ flows (mL/min):
+; Brain:
+; age 50  727.9
+; age 60  692.9
+; age 70  650.6
+; age 80  623.8
+; age 90  594.4
+; age 100 536.1
+; Kidney:
+; age 50  1116.3
+; age 60  913.3
+; age 70   730.3
+; age 80   567.3
+; age 90   424.3
+; age 100  301.3
+; Total liver:
+; age 50  1661.6
+; age 60  1418.6
+; age 70  1091.6
+; age 80   819.7
+; age 90   688.6
+; age 100  555.1
+; 50-y reference flow fractions
+QBC50 = 0.12
+QKC50 = 0.19
+QLC50 = 0.255
+; Published brain blood-flow shape
+; For age <=50, factor is fixed at 1.
+QB_ref_mL_min = IF Age_year <= 50 THEN 727.9 ELSE IF Age_year <= 60 THEN
+727.9+(692.9-727.9)*(Age_year-50)/10 ELSE IF Age_year <= 70 THEN
+692.9+(650.6-692.9)*(Age_year-60)/10 ELSE IF Age_year <= 80 THEN
+650.6+(623.8-650.6)*(Age_year-70)/10 ELSE IF Age_year <= 90 THEN
+623.8+(594.4-623.8)*(Age_year-80)/10 ELSE IF Age_year <= 100 THEN
+594.4+(536.1-594.4)*(Age_year-90)/10 ELSE 536.1
+QB_age_factor = QB_ref_mL_min/727.9
+ 
+; Published kidney blood-flow shape
+; For age <=50, factor is fixed at 1.
+QK_ref_mL_min = IF Age_year <= 50 THEN 1116.3 ELSE IF Age_year <= 60 THEN
+1116.3+(913.3-1116.3)*(Age_year-50)/10 ELSE IF Age_year <= 70 THEN
+913.3+(730.3-913.3)*(Age_year-60)/10 ELSE IF Age_year <= 80 THEN
+730.3+(567.3-730.3)*(Age_year-70)/10 ELSE IF Age_year <= 90 THEN
+567.3+(424.3-567.3)*(Age_year-80)/10 ELSE IF Age_year <= 100 THEN
+424.3+(301.3-424.3)*(Age_year-90)/10 ELSE 301.3
+QK_age_factor = QK_ref_mL_min/1116.3
+; Published total liver blood-flow shape
+; For age <=50, factor is fixed at 1.
+QL_ref_mL_min = IF Age_year <= 50 THEN 1661.6 ELSE IF Age_year <= 60 THEN
+1661.6+(1418.6-1661.6)*(Age_year-50)/10 ELSE IF Age_year <= 70 THEN
+1418.6+(1091.6-1418.6)*(Age_year-60)/10 ELSE IF Age_year <= 80 THEN
+1091.6+(819.7-1091.6)*(Age_year-70)/10 ELSE IF Age_year <= 90 THEN
+819.7+(688.6-819.7)*(Age_year-80)/10 ELSE IF Age_year <= 100 THEN
+688.6+(555.1-688.6)*(Age_year-90)/10 ELSE 555.1
+QL_age_factor = QL_ref_mL_min/1661.6
+; Dynamic age-specific flow fractions
+QBC = QBC50*QB_age_factor
+QKC = QKC50*QK_age_factor
+QLC = QLC50*QL_age_factor
+QLuC = 1
+; Dynamic whole-blood organ flows
+; Current organ fractions are applied to current whole-blood cardiac output.
+QB_blood = QBC*QC_blood
+QK_blood = QKC*QC_blood
+QL_blood = QLC*QC_blood
+; Convert whole-blood flows to plasma flows used by PBPK equations
+QC = QC_blood*(1-Htc)
+QB = QB_blood*(1-Htc)
+QK = QK_blood*(1-Htc)
+QL = QL_blood*(1-Htc)
+QLu = QC
+QRest = QC-QL-QK-QB
+; AGE-SPECIFIC RENAL FILTRATION
+; eGFR data supplied by the user:
+; 20-29 y: 113.94 mL/min/1.73 m2
+; 30-39 y: 106.93 mL/min/1.73 m2
+; 40-49 y: 100.31 mL/min/1.73 m2
+; 50-59 y:  96.32 mL/min/1.73 m2
+; 60-69 y:  88.63 mL/min/1.73 m2
+; 70-79 y:  82.76 mL/min/1.73 m2
+; For ages 20-69, group means are assigned to the midpoint of each
+; 10-y age band (24.5, 34.5, 44.5, 54.5, 64.5 y), with piecewise-linear
+; interpolation between adjacent midpoints.
+; The current simulation extends to age 79 years, so the >=70-y eGFR
+; information is used in the present simulation.
+eGFR = IF Age_year <= 24.5 THEN 113.94 ELSE IF Age_year <= 34.5 THEN
+113.94+(106.93-113.94)*(Age_year-24.5)/10 ELSE IF Age_year <= 44.5 THEN
+106.93+(100.31-106.93)*(Age_year-34.5)/10 ELSE IF Age_year <= 54.5 THEN
+100.31+(96.32-100.31)*(Age_year-44.5)/10 ELSE IF Age_year <= 64.5 THEN
+96.32+(88.63-96.32)*(Age_year-54.5)/10 ELSE IF Age_year <= 74.5 THEN
+88.63+(82.76-88.63)*(Age_year-64.5)/10 ELSE 82.76
+; Convert indexed eGFR to absolute GFR using dynamic BSA.
+GFR_mL_min = eGFR*SA/1.73
+; mL/min
+GFR = GFR_mL_min*60/1000
+; L/h
+; Derive the PBPK filtration coefficient.
+; Kidney density is treated as approximately 1 kg/L, so VK (L)
+; is numerically used as kidney mass (kg).
+GFRC = GFR/VK
+; L/h/kg kidney
+; Constant physiological parameters
+GEC = 3.5
+protein = 2.0E-6
+; Remaining body volume
+VRest = 0.93*BW -VL -VLu -VB -VK -VPlas -VPTC -Vfil
+; Diagnostic fractional volumes and equivalent cardiac-output scalar
+VLC = VL/BW
+VKC = VK/BW
+VLuC = VLu/BW
+VBC = VB/BW
+VfilC = Vfil/BW
+QCC_equiv = QC_blood/(BW^0.75)
+; 6. F-53B-SPECIFIC PARAMETERS
+; These parameters are kept constant with age.
+; They come from the user's F-53B model or its human extrapolation.
+; The PFOS lifetime paper is used for the age-shape of physiology, not to
+; replace F-53B-specific chemistry.
+PL =13.59
+PK =1.38
+PLu =3.91
+PB = 0.11
+PRest = 0.32
+MW = 532.58
+Free = 0.0043
+Vmax_baso_invitro = 479
+Km_baso = 20.1
+Vmax_apical_invitro = 51803
+Km_apical = 64.4
+RAFbaso = 1
+RAFapi = 0.001
+Kdif =0.001
+KabsC = 0.066
+KunabsC = 0.000421
+K0C = 0.38
+KeffluxC =2.09
+; Keep the same base elimination constants across age.
+; Age effects enter through BW, organ volume, GFR and transporter capacity.
+KbileC = 0.0001
+KurineC = 0.000016
+HL_day = 5588
+; 7. DERIVED KINETIC PARAMETERS
+MK = VK*1000
+; Number of proximal-tubule cells per kg BW
+PTC_cells_perkg = VKC*1000*6E7
+MPTC = VPTC*1000
+Vmax_basoC = Vmax_baso_invitro *RAFbaso *PTC_cells_perkg *protein *60 *(MW/1E12) *1000
+Vmax_apicalC = Vmax_apical_invitro *RAFapi *PTC_cells_perkg *protein *60 *(MW/1E12) *1000
+Vmax_baso = Vmax_basoC*(BW^0.75)
+Vmax_apical = Vmax_apicalC*(BW^0.75)
+Kbile = KbileC*(BW^-0.25)
+Kurine = KurineC*(BW^-0.25)
+Kefflux = KeffluxC*(BW^-0.25)
+Kabs = KabsC*(BW^-0.25)
+Kunabs = KunabsC*(BW^-0.25)
+GE = GEC*(BW^-0.25)
+K0 = K0C*(BW^-0.25)
+; Hepatic clearance
+; Convert the human half-life from days to hours before comparing with QL.
+Vd = (PL*VL +PK*VK +PLu*VLu +PB*VB +PRest*VRest) +VPlas
+Cle_h = 0.693/(HL_day*24)*Vd
+Clint_h_per_Liver = (Cle_h/(1-Cle_h/QL))/VL
+Eh = Clint_h_per_Liver*VL /(Clint_h_per_Liver*VL+QL)
+; 7A. INITIAL BACKGROUND BODY BURDEN AT AGE 20
+; Plasma F-53B concentration at model start = 0.57 ng/mL.
+; 0.57 ng/mL = 0.00057 mg/L.
+; Major perfusion-limited tissues are initialized using the model partition
+; coefficients to avoid an artificial zero-tissue redistribution transient:
+; C_tissue,0 = P_tissue * C_plasma,0
+; These are model-derived equilibrium initial conditions, not measured
+; human organ concentrations.
+C0_plasma_ng_mL = 0.57
+C0_plasma_mg_L = C0_plasma_ng_mL/1000
+C0_liver_mg_L = PL*C0_plasma_mg_L
+C0_kidney_mg_L = PK*C0_plasma_mg_L
+C0_lung_mg_L = PLu*C0_plasma_mg_L
+C0_brain_mg_L = PB*C0_plasma_mg_L
+C0_rest_mg_L = PRest*C0_plasma_mg_L
+; 8. AGE-STRATIFIED ENVIRONMENTAL EXPOSURE
+; Exposure is scaled in direct proportion to age-specific daily energy intake.
+; Reference:
+; age 18-<50 y: 2600 kcal/day -> 0.122 ng/kg/day
+; Scaled exposure:
+; age 50-<65 y: 2450/2600 of reference
+;                 = 0.114962 ng/kg/day
+;                 = 1.14961538E-07 mg/kg/day
+ 
+;   age 65-80 y:  2350/2600 of reference
+;                 = 0.110269 ng/kg/day
+;                 = 1.10269231E-07 mg/kg/day
+; The present model starts at age 20 y, so the 18-<50 y category is applied
+; from age 20 to <50 y. Exposure changes stepwise at ages 50 and 65.
+Dose18_50_mgkgd = 1.22E-7
+Dose50_65_mgkgd = Dose18_50_mgkgd*(2450/2600)
+Dose65_80_mgkgd = Dose18_50_mgkgd*(2350/2600)
+Dose_mgkgd = IF Age_year < 50 THEN Dose18_50_mgkgd ELSE IF Age_year < 65 THEN Dose50_65_mgkgd ELSE Dose65_80_mgkgd
+DOSEF53B = Dose_mgkgd*BW
+doseF53B_int = 24
+ADOSE' = pulse(DOSEF53B,0,doseF53B_int)
+Init ADOSE = 0
+; 9. CONCENTRATIONS
+CA_free = RA_free/(VPlas*0.2)
+CV_free = RV_free/(VPlas*0.8)
+CA = CA_free/Free
+CV = CV_free/Free
+Cplas = ((RA_free+RV_free)/VPlas)/Free
+CL = RL/VL
+CVL = CL/PL
+CKb = RKb/VKb
+CVK = CKb
+CK = CVK*PK
+CLu = RLu/VLu
+CVLu = CLu/PLu
+CB = RB/VB
+CVB = CB/PB
+CRest = RRest/VRest
+CVRest = CRest/PRest
+CPTC = RPTC/VPTC
+Cfil = RFil/Vfil
+; 10. INSTANTANEOUS RENAL TRANSPORT RATES
+Rate_baso = (Vmax_baso*CKb)/(Km_baso+CKb)
+Rate_apical = (Vmax_apical*Cfil)/(Km_apical+Cfil)
+Rate_dif = Kdif*(CKb - CPTC)
+Rate_efflux = Kefflux*RPTC
+Rate_GFR = CA*GFR*Free
+; Optional cumulative diagnostics
+Cum_baso' = Rate_baso
+Init Cum_baso = 0
+Cum_apical' = Rate_apical
+Init Cum_apical = 0
+Cum_dif' = Rate_dif
+Init Cum_dif = 0
+Cum_efflux' = Rate_efflux
+Init Cum_efflux = 0
+Cum_GFR' = Rate_GFR
+Init Cum_GFR = 0
+; 11. DIFFERENTIAL EQUATIONS
+; Venous free plasma
+RV_free' = (QRest*CVRest*Free) +(QK*CVK*Free) +(QL*CVL*Free) +(QB*CVB*Free) -(QLu*CV*Free) +Rate_efflux
+Init RV_free = C0_plasma_mg_L*Free*VPlas*0.8
+; Arterial free plasma
+RA_free' = (QLu*CVLu*Free) -(QC*CA*Free)
+Init RA_free = C0_plasma_mg_L*Free*VPlas*0.2
+; Proximal tubule cells
+RPTC' = Rate_dif +Rate_apical +Rate_baso -Rate_efflux
+Init RPTC = 0
+; PTC background burden is not directly inferred from plasma.
+; Filtrate
+Rfil' = Rate_GFR -Rate_apical -RFil*Kurine
+Init Rfil = 0
+; Filtrate background burden is not directly inferred from plasma.
+; Urine
+Rurine' = Kurine*RFil
+Init Rurine = 0
+; Kidney blood/tissue compartment
+RKb' = QK*(CA-CVK)*Free -Rate_GFR -Rate_dif -Rate_baso
+Init RKb = C0_plasma_mg_L*VKb
+; Rest of body
+RRest' = QRest*(CA-CVRest)*Free
+Init RRest = C0_rest_mg_L*VRest
+; Lung
+RLu' = QLu*(CV-CVLu)*Free
+Init RLu = C0_lung_mg_L*VLu
+; Brain
+RB' = QB*(CA-CVB)*Free
+Init RB = C0_brain_mg_L*VB
+; Stomach
+RST' = pulse(DOSEF53B,0,doseF53B_int) -K0*RST -GE*RST
+Init RST = 0
+RabsST' = K0*RST
+Init RabsST = 0
+; Cumulative biliary transfer
+Rbile' = Kbile*RL
+Init Rbile = 0
+; Small intestine with enterohepatic return
+RSI' = GE*RST -Kabs*RSI -Kunabs*RSI +Kbile*RL
+Init RSI = 0
+RabsSI' = Kabs*RSI
+Init RabsSI = 0
+Total_oral_uptake = RabsSI+RabsST
+; Feces
+Rfeces' = Kunabs*RSI
+Init Rfeces = 0
+; Hepatic metabolism
+Rmeta' = Eh*QL*CA*Free
+Init Rmeta = 0
+; Liver
+RL' = QL*(CA-CVL)*Free -Kbile*RL -Eh*QL*CA*Free +Kabs*RSI +K0*RST
+Init RL = C0_liver_mg_L*VL
+; 12. MASS BALANCE
+Qbal = QC-QL-QK-QRest-QB
+Tmass = RA_free +RV_free +RRest +RKb +RFil +RPTC +RL +RST +RSI +RLu +RB
+Loss = Rurine +Rfeces +Rmeta
+; Initial model-state burden at age 20.
+Initial_body_burden' = 0
+INIT Initial_body_burden = (C0_plasma_mg_L*Free*VPlas) +(C0_rest_mg_L*VRest) +(C0_plasma_mg_L*VKb) +(C0_liver_mg_L*VL) +(C0_lung_mg_L*VLu) +(C0_brain_mg_L*VB)
+Input = Initial_body_burden+ADOSE
+Bal = Input-Tmass-Loss
+; Instantaneous brain concentration
+Brain = RB/VB
