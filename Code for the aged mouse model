@@ -1,0 +1,296 @@
+Starttime = 0
+Stoptime = 2160
+DTMIN = 1e-7
+DTMAX = 0.1
+DTOUT = 0
+TOLERANCE = 0.0000001
+; PHYSIOLOGICAL PARAMETERS
+BW = 0.034    ;kg
+Htc = 0.48    ;unitless
+;Organ volume coefficients
+VLC = 0.059    ;L/kg BW, liver
+VKC = 0.014    ;L/kg BW, kidney
+VLuC = 0.0064    ;L/kg BW, lung
+VBC = 0.016    ;L/kg BW, brain
+VPlasC = 0.049    ;L/kg BW, plasma
+;Renal subcompartment coefficients
+VfilC = 0.0014    ;L/kg BW, filtrate
+VPTCC = 0.000135
+;reference-model PTC volume coefficient
+FVBK = 0.24
+;fraction blood volume of kidney
+protein = 2.0e-6    ;mg protein/PTC
+; ORGAN VOLUMES
+VL = VLC*BW    ;L, liver
+VK = VKC*BW    ;L, kidney
+VLu = VLuC*BW    ;L, lung
+VBrain = VBC*BW    ;L, brain
+VPlas = VPlasC*BW    ;L, plasma
+; Kidney subcompartment volumes
+; Implemented according to supplied reference model:
+; VPTC = VK*VPTCC
+Vfil = VfilC*BW    ;L
+VPTC = VK*VPTCC    ;L
+VKb = VK*FVBK    ;L
+;Kidney mass
+MK = VK*1000    ;g
+;Rest-of-body volume
+VRest = 0.93*BW - VL - VLu - VBrain - VK - VPlas - VPTC - Vfil    ;L
+; PLASMA FLOW PARAMETERS
+QCC = 16.5
+QLC = 0.161
+QKC = 0.091
+QLuC = 1
+QBC = 0.033
+QC = QCC*(BW^0.75)*(1-Htc)    ;L/h, cardiac output adjusted for plasma
+QK = QKC*QC    ;L/h, kidney plasma flow
+QL = QLC*QC    ;L/h, liver plasma flow
+QLu = QLuC*QC    ;L/h, lung plasma flow
+QBrain = QBC*QC    ;L/h, brain plasma flow
+QRest = QC-QK-QL-QBrain    ;L/h
+Qbal = QC-QK-QL-QBrain-QRest
+; CHEMICAL-SPECIFIC PARAMETERS
+PL = 16.51
+;Liver/plasma PC
+PK = 1.38
+;Kidney/plasma PC
+PLu = 3.91
+;Lung/plasma PC
+PBrain = 0.11
+;Brain/plasma PC
+;IMPORTANT:
+;if 0.11 actually came from FAT/plasma data,
+;replace this value with brain/plasma data
+PRest = 0.64
+;Rest-of-body/plasma PC
+MW = 532.58    ;g/mol
+Free = 0.0043
+;fraction unbound in plasma
+; RENAL TRANSPORT PARAMETERS
+MKC = 0.014
+;fraction kidney mass/BW
+Vmax_baso_invitro = 1248.68    ;pmol/mg protein/min
+Km_baso = 354.22    ;mg/L
+Vmax_apical_invitro = 1808    ;pmol/mg protein/min
+Km_apical = 211.84    ;mg/L
+RAFbaso = 3.99
+RAFapi =2.81
+GFRC = 59    ;L/h/kg kidney
+Kdif = 0.00051    ;L/h
+KeffluxC = 2.09
+;allometric coefficient
+KurineC = 0.000016
+;allometric coefficient
+; GI AND BILIARY PARAMETERS
+Kabsc = 0.042
+KunabsC = 0.00421
+GEC = 0.540
+K0C = 0.38
+KbileC = 0.000999
+; RENAL TRANSPORTER SCALING
+; Follow reference-model structure
+PTC = MKC*6e7*1000    ;cells/kg BW
+Vmax_basoC = Vmax_baso_invitro*RAFbaso*PTC*protein*60*(MW/1e12)*1000
+Vmax_apicalC = Vmax_apical_invitro*RAFapi*PTC*protein*60*(MW/1e12)*1000
+Vmax_baso = Vmax_basoC*(BW^0.75)    ;mg/h
+Vmax_apical = Vmax_apicalC*(BW^0.75)    ;mg/h
+; RATE CONSTANT SCALING
+Kbile = KbileC*(BW^-0.25)    ;1/h
+Kurine = KurineC*(BW^-0.25)    ;1/h
+Kefflux = KeffluxC*(BW^-0.25)    ;1/h
+Kabs = Kabsc*(BW^-0.25)    ;1/h
+Kunabs = KunabsC*(BW^-0.25)    ;1/h
+GE = GEC*(BW^-0.25)    ;1/h
+K0 = K0C*(BW^-0.25)    ;1/h
+GFR = GFRC*(MK/1000)    ;L/h
+; HEPATIC METABOLISM
+;Temporarily set to zero.
+;Urinary and biliary elimination are modeled explicitly.
+HL = 46.5
+;day
+HL_h = HL*24
+;hour
+Vd = (PL*VL + PK*VK + PLu*VLu + PBrain*VBrain + PRest*VRest)+VPlas    ;L
+Cle = 0.693/HL_h*Vd    ;L/h
+Clint = (Cle/(1-Cle/QL))/VL    ;L/h/kg liver
+Eh = Clint*VL/(Clint*VL+QL)    ;unitless
+; EXPOSURE
+DOSEF53B = 0.1*BW    ;mg/dose, corresponding to 0.1 mg/kg
+doseF53B_int = 24    ;h
+DoseInput = pulse(DOSEF53B,0,doseF53B_int)
+;Virtual cumulative input dose for mass balance
+ADOSE' = DoseInput
+Init ADOSE = 0
+; PLASMA CONCENTRATIONS
+CA_free = RA_free/(VPlas*0.2)    ;mg/L
+CV_free = RV_free/(VPlas*0.8)    ;mg/L
+CA = CA_free/Free    ;mg/L total arterial plasma
+CV = CV_free/Free    ;mg/L total venous plasma
+Cplas = ((RA_free+RV_free)/VPlas)/Free    ;mg/L total plasma
+; LIVER CONCENTRATION
+CL = RL/VL    ;mg/L
+CVL = CL/PL    ;mg/L
+; KIDNEY CONCENTRATIONS
+; Follow supplied reference model exactly in structure:
+; CKb = kidney blood/plasma concentration
+; CVK = plasma leaving kidney
+; CK  = modeled kidney tissue concentration
+CKb = RKb/VKb    ;mg/L
+CVK = CKb    ;mg/L
+CK = CVK*PK    ;mg/L, modeled kidney tissue concentration
+CPTC = RPTC/VPTC    ;mg/L, proximal tubular cell concentration
+Cfil = RFil/Vfil    ;mg/L, filtrate concentration
+; LUNG CONCENTRATION
+CLu = RLu/VLu    ;mg/L
+CVLu = CLu/PLu    ;mg/L
+; BRAIN CONCENTRATION
+CBrain = RBrain/VBrain    ;mg/L
+CVBrain = CBrain/PBrain    ;mg/L
+; REST-OF-BODY CONCENTRATION
+CRest = RRest/VRest    ;mg/L
+CVRest = CRest/PRest    ;mg/L
+; RENAL TRANSPORT RATES
+;IMPORTANT:
+;These variables are instantaneous rates.
+;NO apostrophe here.
+;Basolateral uptake
+;kidney blood --> PTC
+RA_baso = (Vmax_baso*CKb)/(Km_baso+CKb)    ;mg/h
+;Apical reabsorption
+;filtrate --> PTC
+RA_apical = (Vmax_apical*Cfil)/(Km_apical+Cfil)    ;mg/h
+;Passive diffusion
+;kidney blood <--> PTC
+Rdif = Kdif*(CKb-CPTC)    ;mg/h
+;PTC efflux
+;PTC --> systemic blood
+RAefflux = Kefflux*RPTC    ;mg/h
+;Glomerular filtration
+RCI = CA*GFR*Free    ;mg/h
+; OPTIONAL CUMULATIVE RENAL TRANSPORT
+A_baso' = RA_baso
+Init A_baso = 0
+A_apical' = RA_apical
+Init A_apical = 0
+A_dif' = Rdif
+Init A_dif = 0
+A_efflux' = RAefflux
+Init A_efflux = 0
+A_GFR' = RCI
+Init A_GFR = 0
+; VENOUS PLASMA
+RV_free' = QRest*CVRest*Free + QK*CVK*Free + QL*CVL*Free + QBrain*CVBrain*Free - QLu*CV*Free + RAefflux
+Init RV_free = 0
+; ARTERIAL PLASMA
+RA_free' = QLu*CVLu*Free - QC*CA*Free
+Init RA_free = 0
+; PROXIMAL TUBULE CELLS
+RPTC' = Rdif + RA_apical + RA_baso - RAefflux
+Init RPTC = 0
+; FILTRATE 
+RFil' = CA*GFR*Free - RA_apical - RFil*Kurine
+Init RFil = 0 
+; URINARY EXCRETION
+Rurine' = Kurine*RFil
+Init Rurine = 0
+; KIDNEY BLOOD COMPARTMENT
+;Follow reference model:
+RKb' = QK*(CA-CVK)*Free - CA*GFR*Free - Rdif - RA_baso
+Init RKb = 0
+; REST OF BODY
+RRest' = QRest*(CA-CVRest)*Free
+Init RRest = 0
+; LUNG
+RLu' = QLu*(CV-CVLu)*Free
+Init RLu = 0
+; BRAIN
+RBrain' = QBrain*(CA-CVBrain)*Free
+Init RBrain = 0
+; GI TRACT
+; STOMACH
+RST' = DoseInput - K0*RST - GE*RST
+Init RST = 0
+;Cumulative stomach absorption
+RabsST' = K0*RST
+Init RabsST = 0
+; SMALL INTESTINE
+;ENTEROHEPATIC RECIRCULATION RETAINED
+;Liver --Kbile--> intestine --Kabs--> liver
+RSI' = GE*RST - Kabs*RSI - Kunabs*RSI + Kbile*RL
+Init RSI = 0
+;Cumulative intestinal absorption
+RabsSI' = Kabs*RSI
+Init RabsSI = 0
+Total_oral_uptake = RabsST + RabsSI
+; BILIARY TRANSFER
+;Internal transfer only
+;not counted directly as systemic loss
+Rbile' = Kbile*RL
+Init Rbile = 0
+ 
+; FECAL EXCRETION
+;Biliary amount first enters intestine.
+;Only Kunabs*RSI is actual fecal loss.
+Rfeces' = Kunabs*RSI
+Init Rfeces = 0
+; LIVER
+Rmeta' = Eh*QL*CA*Free
+Init Rmeta = 0
+RL' = QL*(CA-CVL)*Free - Kbile*RL - Eh*QL*CA*Free + Kabs*RSI + K0*RST
+Init RL = 0
+; AUC
+;Time unit = hour
+AUCPlas' = Cplas
+Init AUCPlas = 0
+AUCLiver' = CL
+Init AUCLiver = 0
+AUCKidney' = CK
+Init AUCKidney = 0
+AUCLung' = CLu
+Init AUCLung = 0
+AUCBrain' = CBrain
+Init AUCBrain = 0
+; DIAGNOSTIC KIDNEY MASS OUTPUT
+;This is NOT the main kidney fitting variable.
+;It only shows explicitly modeled renal mass pools.
+RKidney_modeled = RKb + RPTC + RFil    ;mg
+Kidney_massbased = RKidney_modeled/VK    ;mg/L
+Kidney_massbased_ng_g = Kidney_massbased*1000    ;ng/g
+; MASS BALANCE
+;Kidney states included:
+;RKb + RPTC + RFil
+;CK is only an algebraic model output and must NOT
+;be added again to Tmass.
+Tmass = RA_free + RV_free + RRest + RKb + RFil + RPTC + RL + RST + RSI + RLu + RBrain
+Loss = Rurine + Rfeces + Rmeta
+Input = ADOSE
+Bal = Input - Tmass - Loss
+; OUTPUT VARIABLES
+Day = TIME/24
+;Plasma
+VP = CV
+AP = CA
+Plas = Cplas
+Plas_ng_mL = Cplas*1000    ;ng/mL
+;Liver
+Liver = CL
+Liver_ng_g = CL*1000    ;ng/g
+;Kidney
+;PRIMARY kidney model output used for fitting
+Kidney = CK
+Kidney_ng_g = CK*1000    ;ng/g assuming tissue density approximately 1 g/mL
+;Kidney diagnostic variables
+KidneyBlood = CKb
+KidneyBlood_ng_mL = CKb*1000
+PTC_conc = CPTC
+Filtrate = Cfil
+;Lung
+Lung = CLu
+Lung_ng_g = CLu*1000    ;ng/g
+;Brain
+Brain = CBrain
+Brain_ng_g = CBrain*1000    ;ng/g
+;Rest
+Rest = CRest
+ 
+; END MODEL
