@@ -30,13 +30,11 @@ Exposure_stop_h = Exposure_days*24
 DTMIN = 1e-7
 DTMAX = 0.1
 DTOUT = 1
-TOLERANCE = 1e-7
+TOLERANCE = 1e-10
 
 ; PHYSIOLOGY
 
 BW = 0.034
-BW_ref_kg = 1
-BWratio = BW/BW_ref_kg
 
 Htc = 0.48
 
@@ -82,7 +80,7 @@ QKC = 0.091
 QLuC = 1
 QBC = 0.033
 
-QC = QCC*(BWratio^0.75)*(1-Htc)
+QC = QCC*(BW^0.75)*(1-Htc)
 QK = QKC*QC
 QL = QLC*QC
 QLu = QLuC*QC
@@ -120,7 +118,7 @@ MKC = VKC
 
 Vmax_baso_invitro = 1248.68
 Km_baso = 354.22
-
+Vmax_baso_eff = 4982.2332
 Vmax_apical_invitro = 1808
 Km_apical = 211.84
 
@@ -146,21 +144,21 @@ KbileC = 0.000999
 
 PTC_cells_perkg = MKC*6e7*1000
 
-Vmax_basoC = Vmax_baso_invitro*RAFbaso*PTC_cells_perkg*protein*60*(MW/1e12)*1000
+Vmax_basoC = Vmax_baso_eff  *PTC_cells_perkg*protein*60*(MW/1e12)*1000
 Vmax_apicalC = Vmax_apical_invitro*RAFapi*PTC_cells_perkg*protein*60*(MW/1e12)*1000
 
-Vmax_baso = Vmax_basoC*(BWratio^0.75)
-Vmax_apical = Vmax_apicalC*(BWratio^0.75)
+Vmax_baso = Vmax_basoC*(BW^0.75)
+Vmax_apical = Vmax_apicalC*(BW^0.75)
 
 ; FIRST-ORDER RATE SCALING
 
-Kbile = KbileC*(BWratio^-0.25)
-Kurine = KurineC*(BWratio^-0.25)
-Kefflux = KeffluxC*(BWratio^-0.25)
-Kabs = KabsC*(BWratio^-0.25)
-Kunabs = KunabsC*(BWratio^-0.25)
-GE = GEC*(BWratio^-0.25)
-K0 = K0C*(BWratio^-0.25)
+Kbile = KbileC*(BW^-0.25)
+Kurine = KurineC*(BW^-0.25)
+Kefflux = KeffluxC*(BW^-0.25)
+Kabs = KabsC*(BW^-0.25)
+Kunabs = KunabsC*(BW^-0.25)
+GE = GEC*(BW^-0.25)
+K0 = K0C*(BW^-0.25)
 
 GFR = GFRC*(MK/1000)
 
@@ -180,7 +178,7 @@ Ksys = Ksys_extra_h
 
 ; DAILY ORAL EXPOSURE
 
-Dose_mgkgd = 0.1
+Dose_mgkgd = 0.5
 ; Change to 0.02 or 0.5 for the other experimental groups.
 
 DOSEF53B = Dose_mgkgd*BW
@@ -443,4 +441,3 @@ Brain_ng_g = CBrain*1000
 Rest = CRest
 
 ; END MOUSE MODEL
-
