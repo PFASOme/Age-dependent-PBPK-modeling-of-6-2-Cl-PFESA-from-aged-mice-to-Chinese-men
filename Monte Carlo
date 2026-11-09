@@ -1,21 +1,31 @@
 
-; 6:2 Cl-PFESA HUMAN PBPK -- V3 MONTE CARLO (8 influential parameters)
+
+; 6:2 Cl-PFESA HUMAN PBPK -- MC SIX PARAMETERS
 ; Berkeley Madonna
 ; Time: h; amounts: mg; concentrations: mg/L
 ;
-; Default exposure: age 20 to 65, once every 24 h.
-; Physiological age always equals chronological age.
-; No age-freezing switch.
+; Exposure: age 20 to 65, once every 24 h.
+; Physiological age equals chronological age.
+; Post-50 organ flows use age-50 absolute-flow anchors.
 ; Total plasma amount states and total-concentration convection.
 ; PTC efflux returns to the renal exchange pool.
 ; VPTCC is L/g kidney.
-; Additional systemic parent loss is OFF by default.
-; Monte Carlo uncertainty is propagated for 8 sensitivity-selected inputs.
-; This baseline does not claim to reproduce the observed half-life.
+; Additional systemic parent loss is OFF.
+; Nominal inputs follow the latest supplied human-model parameter set.
 ; Renal RBC binding is neglected.
 ; Tissue density is approximated as 1 kg/L.
 ; Km_baso and Kdif are effective total-concentration parameters.
-; They are not measured unbound Km or membrane permeability.
+;
+; MC parameters:
+; VL_scale, PL, PRest, KbileC, KabsC, KunabsC.
+;
+; VL_scale: truncated normal, parent mean = 1, CV = 30%.
+; Other five parameters:
+; truncated log-normal, parent CV = 20%.
+;
+; Each parameter is sampled once per run.
+; Parameter values remain fixed within each run.
+; Age-dependent physiology continues to change.
 
 METHOD Stiff
 
@@ -31,7 +41,7 @@ Stoptime = 394200
 
 DTMIN = 1e-7
 DTMAX = 1
-DTOUT = 24
+DTOUT = 8760
 TOLERANCE = 1e-8
 
 Age_year = Age_start_year+TIME/(365*24)
@@ -40,34 +50,25 @@ Age_phys = Age_year
 KidneyPerfused = 0
 
 ; PHYSIOLOGICAL MULTIPLIERS
-; Default = 1; retain physiologically valid positive values.
+; Keep these at 1 for the current MC design.
 
 mBW = 1
 mHT = 1
+
+mVL = 1
 mVB = 1
+mVK = 1
 mVLu = 1
+
 mQC = 1
 mQBC = 1
 mQKC = 1
 mQLC = 1
+
 meGFR = 1
 
-; MONTE CARLO PARAMETERS 1-2: organ-volume trajectory scale factors
-; Old 10001 sentinel convention is retained.
-; These correspond to sensitivity labels VLC and VKC.
-; Do NOT sample the derived VLC=VL/BW or VKC=VK/BW algebraically.
-; Instead sample one individual-specific multiplier and apply it to the
-; complete age-dependent organ-volume trajectory from age 20 to 65.
-;
-; Normal(mean=1, SD=0.30), accepted range 0.4120-1.5880.
-; Out-of-range draws are coded as 10001 and excluded after simulation.
-VLC_scalec = init(normal(1,0.30))
-VLC_scale = IF (VLC_scalec > 0.4120) AND (VLC_scalec < 1.5880) THEN VLC_scalec ELSE 10001
-VLC_scale_used = IF VLC_scale = 10001 THEN 1 ELSE VLC_scale
-
-VKC_scalec = init(normal(1,0.30))
-VKC_scale = IF (VKC_scalec > 0.4120) AND (VKC_scalec < 1.5880) THEN VKC_scalec ELSE 10001
-VKC_scale_used = IF VKC_scale = 10001 THEN 1 ELSE VKC_scale
+PL_scale = 1
+PRest_scale = 1
 
 ; AGE-DEPENDENT ANTHROPOMETRY
 
@@ -105,6 +106,7 @@ BW = mBW*BW_phys_base
 HT = mHT*HT_phys_base
 
 BW_dose = BW
+
 BW_ref_kg = 1
 BWratio = BW/BW_ref_kg
 
@@ -113,13 +115,16 @@ SA = 0.007184*(BW^0.425)*(HT^0.725)
 ; AGE-DEPENDENT ORGAN VOLUMES
 
 VL_pred = -0.0143744-0.0044728*Age_phys+0.0264591*BW
+
 VB_pred = 0.218096-0.001590*Age_phys-0.003274*BW+0.008626*HT
+
 VK_pred = 0.05668-0.0004962*Age_phys+0.003501*BW
+
 VLu_pred = -0.01454+0.0007269*Age_phys+9.329E-6*Age_phys^2+0.006430*BW+3.083E-5*BW^2
 
-VL = VLC_scale_used*VL_pred
+VL = VL_scale*mVL*VL_pred
 VB = mVB*VB_pred
-VK = VKC_scale_used*VK_pred
+VK = mVK*VK_pred
 VLu = mVLu*VLu_pred
 
 ; CARDIAC OUTPUT AND PLASMA VOLUMES
@@ -132,19 +137,24 @@ Htc = 0.44
 VPlasC = 0.0428
 VPlas_total = VPlasC*BW
 
+; KIDNEY SUBCOMPARTMENT VOLUMES
+
 Vfil = 0.10*VK
 
 VPTCC = 0.000135
 ; L/g kidney
+
 VPTC = VK*1000*VPTCC
 
 FVBK = 0.24
+
 VKblood = VK*FVBK
 VKplasma = VKblood*(1-Htc)
 
 VKpar = VK-VKblood-VPTC-Vfil
 
 ; Central plasma excludes explicitly represented renal plasma.
+
 VPlas = VPlas_total-VKplasma
 
 ; AGE-DEPENDENT ORGAN BLOOD FLOWS
@@ -152,6 +162,9 @@ VPlas = VPlas_total-VKplasma
 QBC50 = 0.12
 QKC50 = 0.19
 QLC50 = 0.255
+
+; Literature absolute cerebral blood flow, mL/min.
+; Used to calculate relative changes after age 50.
 
 QB_ref_mL_min =
 IF Age_phys <= 50 THEN 727.9
@@ -164,6 +177,8 @@ ELSE 536.1
 
 QB_age_factor = QB_ref_mL_min/727.9
 
+; Literature absolute renal blood flow, mL/min.
+
 QK_ref_mL_min =
 IF Age_phys <= 50 THEN 1116.3
 ELSE IF Age_phys <= 60 THEN 1116.3+(913.3-1116.3)*(Age_phys-50)/10
@@ -174,6 +189,8 @@ ELSE IF Age_phys <= 100 THEN 424.3+(301.3-424.3)*(Age_phys-90)/10
 ELSE 301.3
 
 QK_age_factor = QK_ref_mL_min/1116.3
+
+; Literature total hepatic blood flow, mL/min.
 
 QL_ref_mL_min =
 IF Age_phys <= 50 THEN 1661.6
@@ -186,13 +203,46 @@ ELSE 555.1
 
 QL_age_factor = QL_ref_mL_min/1661.6
 
-QBC = mQBC*QBC50*QB_age_factor
-QKC = mQKC*QKC50*QK_age_factor
-QLC = mQLC*QLC50*QL_age_factor
+; AGE-50 MODEL REFERENCE FOR ORGAN BLOOD FLOWS
+; These values follow the current anthropometric functions.
+; Update them if the underlying age-50 anthropometry changes.
 
-QB_blood = QBC*QC_blood
-QK_blood = QKC*QC_blood
-QL_blood = QLC*QC_blood
+BW50_ref = mBW*72.05
+HT50_ref = mHT*168.30
+
+SA50_ref = 0.007184*(BW50_ref^0.425)*(HT50_ref^0.725)
+
+QC50_blood_ref = mQC*(6.48370-1.59948*50+214.68572*SA50_ref)
+
+QB50_blood_ref = mQBC*QBC50*QC50_blood_ref
+QK50_blood_ref = mQKC*QKC50*QC50_blood_ref
+QL50_blood_ref = mQLC*QLC50*QC50_blood_ref
+
+; Through age 50:
+; fixed reference fractions of current cardiac output.
+;
+; After age 50:
+; model age-50 absolute flow times its literature age factor.
+
+QB_blood =
+IF Age_phys <= 50 THEN mQBC*QBC50*QC_blood
+ELSE QB50_blood_ref*QB_age_factor
+
+QK_blood =
+IF Age_phys <= 50 THEN mQKC*QKC50*QC_blood
+ELSE QK50_blood_ref*QK_age_factor
+
+QL_blood =
+IF Age_phys <= 50 THEN mQLC*QLC50*QC_blood
+ELSE QL50_blood_ref*QL_age_factor
+
+; Derived organ-flow fractions.
+
+QBC = QB_blood/QC_blood
+QKC = QK_blood/QC_blood
+QLC = QL_blood/QC_blood
+
+; Convert whole-blood flows to plasma flows.
 
 QC = QC_blood*(1-Htc)
 QB = QB_blood*(1-Htc)
@@ -214,8 +264,10 @@ ELSE IF Age_phys <= 74.5 THEN 88.63+(82.76-88.63)*(Age_phys-64.5)/10
 ELSE 82.76
 
 eGFR = meGFR*eGFR_base
+
 GFR_mL_min = eGFR*SA/1.73
 GFR = GFR_mL_min*60/1000
+
 GFRC = GFR/VK
 
 ; REST-OF-BODY VOLUME
@@ -230,129 +282,248 @@ VfilC = Vfil/BW
 
 QCC_equiv = QC_blood/(BWratio^0.75)
 
-; PARTITION AND BINDING PARAMETERS
-; MONTE CARLO PARAMETERS 3-4: PL and PRest.
-; Old 10001 sentinel convention is retained.
-; Log-normal distributions use CV = 0.20 and 2.5th-97.5th acceptance bounds.
+; MONTE CARLO CONTROL
+;
+; MC_on = 0: nominal deterministic baseline.
+; MC_on = 1: random parameter sets.
+;
+; Distribution widths are uncertainty assumptions.
+; They are not fitted confidence intervals.
+;
+; Bounds correspond to the parent-distribution
+; 2.5th and 97.5th percentiles.
+;
+; Invalid parameter sets use nominal inputs for execution.
+; Exclude ALL MC_valid = 0 runs from summaries.
 
-PLc = init(exp(normal(2.714757153,0.198042200)))
-PL = IF (PLc > 10.242999) AND (PLc < 22.262861) THEN PLc ELSE 10001
-PL_used = IF PL = 10001 THEN 15.40 ELSE PL
+MC_on = 1
+
+MC_CV = 0.20
+MC_CV_VL = 0.30
+
+MC_sigma = SQRT(LOGN(1+MC_CV^2))
+MC_z_limit = 1.95996398454005
+
+; NOMINAL PARAMETER VALUES
+
+VL_scale_base = 1
+
+PL_base = 12.99
+PRest_base = 0.32
+
+KbileC_base = 0.000487
+KabsC_base = 0.012
+KunabsC_base = 0.000689
+
+; LOG-SCALE PARAMETERS
+; Nominal chemical inputs are arithmetic means
+; of the untruncated parent distributions.
+
+MC_mu_PL = LOGN(PL_base)-0.5*MC_sigma^2
+MC_mu_PRest = LOGN(PRest_base)-0.5*MC_sigma^2
+
+MC_mu_KbileC = LOGN(KbileC_base)-0.5*MC_sigma^2
+MC_mu_KabsC = LOGN(KabsC_base)-0.5*MC_sigma^2
+MC_mu_KunabsC = LOGN(KunabsC_base)-0.5*MC_sigma^2
+
+; RANDOM DRAWS AT INITIALIZATION
+; NORMAL(0,1) is a standard normal variate.
+; Each draw remains fixed throughout one run.
+; Do not assign the same fixed seed to all six calls.
+
+VL_scalec = INIT(VL_scale_base+MC_CV_VL*VL_scale_base*NORMAL(0,1))
+
+PLc = INIT(EXP(MC_mu_PL+MC_sigma*NORMAL(0,1)))
+PRestc = INIT(EXP(MC_mu_PRest+MC_sigma*NORMAL(0,1)))
+
+KbileCc = INIT(EXP(MC_mu_KbileC+MC_sigma*NORMAL(0,1)))
+KabsCc = INIT(EXP(MC_mu_KabsC+MC_sigma*NORMAL(0,1)))
+KunabsCc = INIT(EXP(MC_mu_KunabsC+MC_sigma*NORMAL(0,1)))
+
+; SAMPLING BOUNDS
+
+VL_scale_lower = VL_scale_base*(1-MC_z_limit*MC_CV_VL)
+VL_scale_upper = VL_scale_base*(1+MC_z_limit*MC_CV_VL)
+
+PL_lower = EXP(MC_mu_PL-MC_z_limit*MC_sigma)
+PL_upper = EXP(MC_mu_PL+MC_z_limit*MC_sigma)
+
+PRest_lower = EXP(MC_mu_PRest-MC_z_limit*MC_sigma)
+PRest_upper = EXP(MC_mu_PRest+MC_z_limit*MC_sigma)
+
+KbileC_lower = EXP(MC_mu_KbileC-MC_z_limit*MC_sigma)
+KbileC_upper = EXP(MC_mu_KbileC+MC_z_limit*MC_sigma)
+
+KabsC_lower = EXP(MC_mu_KabsC-MC_z_limit*MC_sigma)
+KabsC_upper = EXP(MC_mu_KabsC+MC_z_limit*MC_sigma)
+
+KunabsC_lower = EXP(MC_mu_KunabsC-MC_z_limit*MC_sigma)
+KunabsC_upper = EXP(MC_mu_KunabsC+MC_z_limit*MC_sigma)
+
+; VALIDITY OF EACH DRAW
+
+MC_VL_ok =
+IF VL_scalec >= VL_scale_lower AND VL_scalec <= VL_scale_upper
+THEN 1 ELSE 0
+
+MC_PL_ok =
+IF PLc >= PL_lower AND PLc <= PL_upper
+THEN 1 ELSE 0
+
+MC_PRest_ok =
+IF PRestc >= PRest_lower AND PRestc <= PRest_upper
+THEN 1 ELSE 0
+
+MC_KbileC_ok =
+IF KbileCc >= KbileC_lower AND KbileCc <= KbileC_upper
+THEN 1 ELSE 0
+
+MC_KabsC_ok =
+IF KabsCc >= KabsC_lower AND KabsCc <= KabsC_upper
+THEN 1 ELSE 0
+
+MC_KunabsC_ok =
+IF KunabsCc >= KunabsC_lower AND KunabsCc <= KunabsC_upper
+THEN 1 ELSE 0
+
+; VALIDITY OF THE WHOLE PARAMETER SET
+
+MC_valid =
+IF MC_on = 0 THEN 1
+ELSE MC_VL_ok*MC_PL_ok*MC_PRest_ok*MC_KbileC_ok*MC_KabsC_ok*MC_KunabsC_ok
+
+; PARAMETER VALUES USED BY THE MODEL
+; A rejected set uses all nominal inputs.
+; Its outputs must still be removed using MC_valid.
+
+VL_scale =
+IF MC_on = 1 AND MC_valid = 1
+THEN VL_scalec
+ELSE VL_scale_base
+
+PL =
+IF MC_on = 1 AND MC_valid = 1
+THEN PLc*PL_scale
+ELSE PL_base*PL_scale
+
+PRest =
+IF MC_on = 1 AND MC_valid = 1
+THEN PRestc*PRest_scale
+ELSE PRest_base*PRest_scale
+
+KbileC =
+IF MC_on = 1 AND MC_valid = 1
+THEN KbileCc
+ELSE KbileC_base
+
+KabsC =
+IF MC_on = 1 AND MC_valid = 1
+THEN KabsCc
+ELSE KabsC_base
+
+KunabsC =
+IF MC_on = 1 AND MC_valid = 1
+THEN KunabsCc
+ELSE KunabsC_base
+
+; OTHER PARTITION AND BINDING PARAMETERS
 
 PK_exchange_seed = 1.38
-; Approximate exchange-pool starting seed only.
-; PTC and filtrate contributions are excluded from this initialization.
-; This is not a fitted whole-kidney AUC ratio.
+
+; Exchange-pool seed only.
+; This is not a fitted whole-kidney partition coefficient.
 
 PKpar_start = (PK_exchange_seed*VK-VKplasma)/VKpar
+
 PKpar_scale = 1
 PKpar = PKpar_start*PKpar_scale
 
-PLu = 5.02
+PLu = 4.58
 PB = 0.14
-
-
-PRestc = init(exp(normal(-1.159044640,0.198042200)))
-PRest = IF (PRestc > 0.212842) AND (PRestc < 0.462605) THEN PRestc ELSE 10001
-PRest_used = IF PRest = 10001 THEN 0.32 ELSE PRest
 
 MW = 532.58
 Free = 0.0043
 
 ; RENAL TRANSPORT PARAMETERS
-; MONTE CARLO PARAMETERS 5-8:
-; Vmax_baso_invitro, Km_baso, RAFbaso, and KeffluxC.
-; Old 10001 sentinel convention is retained.
-; Log-normal distributions use CV = 0.20 and 2.5th-97.5th acceptance bounds.
+; Fixed human-model inputs in this MC analysis.
 
-Vmax_baso_invitroc = init(exp(normal(6.152090241,0.198042200)))
-Vmax_baso_invitro = IF (Vmax_baso_invitroc > 318.597174) AND (Vmax_baso_invitroc < 692.461717) THEN Vmax_baso_invitroc ELSE 10001
-Vmax_baso_invitro_used = IF Vmax_baso_invitro = 10001 THEN 479 ELSE Vmax_baso_invitro
-
-Km_basoc = init(exp(normal(2.981109458,0.198042200)))
-Km_baso = IF (Km_basoc > 13.369109) AND (Km_basoc < 29.057371) THEN Km_basoc ELSE 10001
-Km_baso_used = IF Km_baso = 10001 THEN 20.1 ELSE Km_baso
+Vmax_baso_invitro = 479
+Km_baso = 20.1
 
 Vmax_apical_invitro = 51803
 Km_apical = 64.4
 
-RAFbasoc = init(exp(normal(-0.019610357,0.198042200)))
-RAFbaso = IF (RAFbasoc > 0.665130) AND (RAFbasoc < 1.445640) THEN RAFbasoc ELSE 10001
-RAFbaso_used = IF RAFbaso = 10001 THEN 1 ELSE RAFbaso
-
+RAFbaso = 1
 RAFapi = 0.001
 
 Kdif = 0.001
-
-KeffluxCc = init(exp(normal(0.717553709,0.198042200)))
-KeffluxC = IF (KeffluxCc > 1.390121) AND (KeffluxCc < 3.021388) THEN KeffluxCc ELSE 10001
-KeffluxC_used = IF KeffluxC = 10001 THEN 2.09 ELSE KeffluxC
-
+KeffluxC = 2.09
 KurineC = 0.000016
 
 protein = 2.0E-6
 
-; GI AND BILIARY PARAMETERS
+; FIXED GI PARAMETERS
+; KabsC, KunabsC and KbileC are assigned above.
 
-KabsC = 0.05
-KunabsC = 0.000853
 K0C = 0.38
-KbileC = 0.000136
 GEC = 3.5
 
 ; TRANSPORTER SCALING
 
 PTC_cells_perkg = VKC*1000*6E7
 
-Vmax_basoC = Vmax_baso_invitro_used*RAFbaso_used*PTC_cells_perkg*protein*60*(MW/1E12)*1000
+Vmax_basoC = Vmax_baso_invitro*RAFbaso*PTC_cells_perkg*protein*60*(MW/1E12)*1000
+
 Vmax_apicalC = Vmax_apical_invitro*RAFapi*PTC_cells_perkg*protein*60*(MW/1E12)*1000
 
 Vmax_baso = Vmax_basoC*(BWratio^0.75)
 Vmax_apical = Vmax_apicalC*(BWratio^0.75)
 
 ; FIRST-ORDER RATE SCALING
+; Sampled coefficients remain fixed within each run.
+; Actual rates change with age-dependent body weight.
 
 Kbile = KbileC*(BWratio^-0.25)
 Kurine = KurineC*(BWratio^-0.25)
-Kefflux = KeffluxC_used*(BWratio^-0.25)
+Kefflux = KeffluxC*(BWratio^-0.25)
+
 Kabs = KabsC*(BWratio^-0.25)
 Kunabs = KunabsC*(BWratio^-0.25)
+
 GE = GEC*(BWratio^-0.25)
 K0 = K0C*(BWratio^-0.25)
 
 ; OPTIONAL ADDITIONAL SYSTEMIC PARENT LOSS
 
 HL_target_day = 5588
+
 ; Literature reference only.
-; This value does not set Ksys.
+; This parameter does not set Ksys.
 
 Ksys_extra_h = 0
-; Units: 1/h.
-; Default zero is a recalibration baseline.
-; Estimate jointly with explicit clearance only if supported.
-; Do not set automatically from total terminal half-life.
-
 Ksys = Ksys_extra_h
 
 ; INITIAL BACKGROUND BURDEN AT AGE 20
-; Background concentration is an assumed starting condition.
-; Tissue states start in partition equilibrium.
+; Initial plasma concentration is fixed.
+; Tissue initialization uses the current run's partition coefficients.
 ; PTC and filtrate initial amounts are zero.
 
 C0_plasma_ng_mL = 0.57
 C0_plasma_mg_L = C0_plasma_ng_mL/1000
 
-C0_liver_mg_L = PL_used*C0_plasma_mg_L
+C0_liver_mg_L = PL*C0_plasma_mg_L
 C0_kidney_par_mg_L = PKpar*C0_plasma_mg_L
+
 C0_lung_mg_L = PLu*C0_plasma_mg_L
 C0_brain_mg_L = PB*C0_plasma_mg_L
-C0_rest_mg_L = PRest_used*C0_plasma_mg_L
+C0_rest_mg_L = PRest*C0_plasma_mg_L
 
 RKE0 = C0_plasma_mg_L*VKplasma+C0_kidney_par_mg_L*VKpar
 
 ; AGE-STRATIFIED DAILY EXPOSURE
 
 Dose18_50_mgkgd = 1.22E-7
+
 Dose50_65_mgkgd = Dose18_50_mgkgd*(2450/2600)
 Dose65_80_mgkgd = Dose18_50_mgkgd*(2350/2600)
 
@@ -361,13 +532,16 @@ IF Age_year < 50 THEN Dose18_50_mgkgd
 ELSE IF Age_year < 65 THEN Dose50_65_mgkgd
 ELSE Dose65_80_mgkgd
 
-Exposure_on = IF Age_year < Exposure_start_age THEN 0 ELSE 1
+Exposure_on =
+IF Age_year < Exposure_start_age THEN 0 ELSE 1
+
 Daily_dose_mg = Exposure_on*Dose_mgkgd*BW_dose
 
 Dose_interval_h = 24
 Exposure_start_h = (Exposure_start_age-Age_start_year)*365*24
 
-; Require Age_start_year <= Exposure_start_age < Age_end_year.
+; Require:
+; Age_start_year <= Exposure_start_age < Age_end_year.
 ; Default ages correspond to an integer number of exposure days.
 
 Pulse_gate_stop_h = Stoptime-Dose_interval_h/2
@@ -386,10 +560,12 @@ DoseCount' = Dose_event_rate
 INIT DoseCount = 0
 
 Expected_dose_count = (Stoptime-Exposure_start_h)/Dose_interval_h
+
 Dose_count_error = DoseCount-Expected_dose_count
 
 ; Interpret dose-count error at the simulation endpoint.
-; Default: 16425 doses, final dose 24 h before the endpoint.
+; Default schedule: 16425 doses.
+; The final scheduled dose is 24 h before the endpoint.
 
 ; TOTAL PLASMA CONCENTRATIONS
 
@@ -404,7 +580,8 @@ Cplas = (RA+RV)/VPlas
 ; LIVER CONCENTRATIONS
 
 CL = RL/VL
-CVL = CL/PL_used
+CVL = CL/PL
+
 CVL_free = Free*CVL
 
 ; RENAL EXCHANGE AND OBSERVATION
@@ -415,41 +592,51 @@ CVK = RKE/Kidney_partition_den
 CVK_free = Free*CVK
 
 CKpar = PKpar*CVK
+
 A_Kvascular = CVK*VKplasma
 A_Kpar = CKpar*VKpar
 
 Kidney_partition_check = RKE-A_Kvascular-A_Kpar
+
 PK_exchange_actual = Kidney_partition_den/VK
 
 CPTC = RPTC/VPTC
 Cfil = RFil/Vfil
 
 Kidney_amount_observed = RKE+RPTC+RFil-KidneyPerfused*A_Kvascular
+
 CK = Kidney_amount_observed/VK
 
-Whole_kidney_to_CVK = IF CVK > 0 THEN CK/CVK ELSE 0
+Whole_kidney_to_CVK =
+IF CVK > 0 THEN CK/CVK ELSE 0
 
 ; LUNG, BRAIN AND REST CONCENTRATIONS
 
 CLu = RLu/VLu
 CVLu = CLu/PLu
+
 CVLu_free = Free*CVLu
 
 CB = RB/VB
 CVB = CB/PB
+
 CVB_free = Free*CVB
 
 CRest = RRest/VRest
-CVRest = CRest/PRest_used
+CVRest = CRest/PRest
+
 CVRest_free = Free*CVRest
 
 ; RENAL TRANSPORT RATES
 
-Rate_baso = Vmax_baso*CVK/(Km_baso_used+CVK)
+Rate_baso = Vmax_baso*CVK/(Km_baso+CVK)
+
 Rate_apical = Vmax_apical*Cfil/(Km_apical+Cfil)
 
 Rate_dif = Kdif*(CVK-CPTC)
+
 Rate_efflux = Kefflux*RPTC
+
 Rate_GFR = CA_free*GFR
 
 Cum_baso' = Rate_baso
@@ -472,6 +659,7 @@ INIT Cum_GFR = 0
 ; ADDITIONAL LOSS ACCOUNTING
 
 Systemic_mass_for_loss = RA+RV+RRest+RKE+RPTC+RL+RLu+RB
+
 Rate_sysloss = Ksys*Systemic_mass_for_loss
 
 Rsysloss' = Rate_sysloss
@@ -532,19 +720,22 @@ Rbile' = Kbile*RL
 INIT Rbile = 0
 
 ; Biliary transfer enters the intestine.
-; Do not add Rbile again to terminal loss.
+; Do not count Rbile again as terminal loss.
 
 ; INITIAL BURDEN AND MASS BALANCE
 
 Qbal = QC-QL-QK-QRest-QB
 
 Tmass = RA+RV+RRest+RKE+RFil+RPTC+RL+RST+RSI+RLu+RB
+
 Loss = Rurine+Rfeces+Rsysloss
 
 Initial_body_burden' = 0
+
 INIT Initial_body_burden = C0_plasma_mg_L*VPlas+RKE0+C0_rest_mg_L*VRest+C0_liver_mg_L*VL+C0_lung_mg_L*VLu+C0_brain_mg_L*VB
 
 Input = Initial_body_burden+ADOSE
+
 Bal = Input-Tmass-Loss
 
 Mass_recovery_pct =
@@ -557,10 +748,14 @@ IF Input > 0
 THEN 100*ABS(Bal)/Input
 ELSE 0
 
-ln_Cplas = IF Cplas > 0 THEN LOGN(Cplas) ELSE -999
-; No terminal half-life is estimated from this daily-exposure main run.
+ln_Cplas =
+IF Cplas > 0 THEN LOGN(Cplas) ELSE -999
 
-; OUTPUTS
+; Mass balance is a numerical consistency diagnostic.
+; It does not validate biological elimination pathways.
+; No terminal half-life is estimated from this exposure run.
+
+; GENERAL OUTPUTS
 
 VP = CV
 AP = CA
@@ -581,6 +776,11 @@ eGFR_output = eGFR
 GFR_mL_min_output = GFR_mL_min
 GFRC_output = GFRC
 
+VL_output_L = VL
+VK_output_L = VK
+VB_output_L = VB
+VLu_output_L = VLu
+
 QC_blood_output_L_h = QC_blood
 QL_blood_output_L_h = QL_blood
 QK_blood_output_L_h = QK_blood
@@ -589,7 +789,10 @@ QB_blood_output_L_h = QB_blood
 QLC_output = QLC
 QKC_output = QKC
 QBC_output = QBC
+
 QRest_output_L_h = QRest
+
+; CONCENTRATION OUTPUTS
 
 Plas = Cplas
 Plas_ng_mL = Plas*1000
@@ -612,80 +815,35 @@ Brain_ng_g = Brain*1000
 Rest = CRest
 Rest_ng_g = Rest*1000
 
-; MONTE CARLO AGE-65 ENDPOINTS AND PARAMETER RECORDS
-; At STOPTIME these equal the age-65 predictions.
+; MONTE CARLO ENDPOINT OUTPUTS
+; Read the final values at TIME = 394200 h.
+; These variables change with time until the age-65 endpoint.
 
 MC_Plasma65_ng_mL = Plas_ng_mL
 MC_Liver65_ng_g = Liver_ng_g
 MC_Kidney65_ng_g = Kidney_ng_g
-MC_Lung65_ng_g = Lung_ng_g
 MC_Brain65_ng_g = Brain_ng_g
+MC_Lung65_ng_g = Lung_ng_g
 
-MC_VLC_scale = VLC_scale
-MC_VKC_scale = VKC_scale
-MC_PL = PL
-MC_PRest = PRest
-MC_Vmax_baso_invitro = Vmax_baso_invitro
-MC_Km_baso = Km_baso
-MC_RAFbaso = RAFbaso
-MC_KeffluxC = KeffluxC
+; PARAMETER VALUES ACTUALLY USED
+; Export together with MC_valid and the endpoint outputs.
 
-MC_VLC_scale_used = VLC_scale_used
-MC_VKC_scale_used = VKC_scale_used
-MC_PL_used = PL_used
-MC_PRest_used = PRest_used
-MC_Vmax_baso_invitro_used = Vmax_baso_invitro_used
-MC_Km_baso_used = Km_baso_used
-MC_RAFbaso_used = RAFbaso_used
-MC_KeffluxC_used = KeffluxC_used
+MC_VL_scale_used = VL_scale
+MC_PL_used = PL
+MC_PRest_used = PRest
 
-MC_valid =
-IF VLC_scale = 10001 OR VKC_scale = 10001 OR PL = 10001 OR PRest = 10001 OR Vmax_baso_invitro = 10001 OR Km_baso = 10001 OR RAFbaso = 10001 OR KeffluxC = 10001 THEN 0
-ELSE 1
+MC_KbileC_used = KbileC
+MC_KabsC_used = KabsC
+MC_KunabsC_used = KunabsC
 
-MC_mass_balance_error_pct = Mass_balance_abs_error_pct
-MC_mass_recovery_pct = Mass_recovery_pct
+; RAW DRAW DIAGNOSTICS
+; On rejected runs these differ from the nominal inputs used.
 
-;======================================================================
-; MONTE CARLO DESIGN -- OLD 10001 SENTINEL CONVENTION
-;======================================================================
-; Each of the eight parameters is sampled ONCE at initialization and retained
-; throughout the age-20-to-65 trajectory for one virtual individual.
-;
-; Parameters and distributions:
-;   VLC_scale: Normal(mean=1, SD=0.30), accept 0.4120-1.5880
-;   VKC_scale: Normal(mean=1, SD=0.30), accept 0.4120-1.5880
-;   PL: Lognormal(arithmetic mean=15.40, CV=0.20), accept 10.242999-22.262861
-;   PRest: Lognormal(arithmetic mean=0.32, CV=0.20), accept 0.212842-0.462605
-;   Vmax_baso_invitro: Lognormal(arithmetic mean=479, CV=0.20), accept 318.597174-692.461717
-;   Km_baso: Lognormal(arithmetic mean=20.1, CV=0.20), accept 13.369109-29.057371
-;   RAFbaso: Lognormal(arithmetic mean=1, CV=0.20), accept 0.665130-1.445640
-;   KeffluxC: Lognormal(arithmetic mean=2.09, CV=0.20), accept 1.390121-3.021388
-;
-; Any out-of-range draw is coded as 10001. The corresponding *_used variable
-; is set to the baseline value so that the ODE system remains numerically stable,
-; but MC_valid is set to 0. Exclude all MC_valid=0 runs during post-processing.
-;
-; Expected retention under eight independent 95% acceptance intervals:
-;   0.95^8 = 0.6634 (~66.3%).
-; Therefore:
-;   3000 attempted runs -> ~1990 retained runs on average.
-;   ~4522 attempted runs -> ~3000 retained runs on average.
-; A practical choice is 4600-5000 attempted runs if ~3000 retained runs are desired.
-;
-; NUMERICAL SPEED:
-;   METHOD Stiff
-;   DTMAX = 1 h
-; is allowed for the Monte Carlo screening run, PROVIDED a deterministic
-; equivalence check against DTMAX = 0.1 h shows negligible endpoint differences.
-; Compare at least age-65 plasma, liver, kidney, lung and brain predictions and
-; mass-balance diagnostics. A suggested numerical acceptance criterion is
-; relative difference <0.1% for each primary endpoint (or a stricter criterion
-; if used in the manuscript).
-;
-; DTOUT remains 24 h in this file. If only age-65 endpoints are required,
-; DTOUT may be increased (e.g. 8760 h) to reduce output/storage overhead without
-; changing the integration tolerance or event schedule.
-;======================================================================
+MC_VL_scale_draw = VL_scalec
 
-; END HUMAN MODEL
+MC_PL_draw = PLc
+MC_PRest_draw = PRestc
+
+MC_KbileC_draw = KbileCc
+MC_KabsC_draw = KabsCc
+MC_KunabsC_draw = KunabsCc
